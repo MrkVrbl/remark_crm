@@ -251,6 +251,11 @@ def import_initial_from_excel(SessionLocal, excel_path: str) -> Tuple[int,int]:
     try:
         for _, r in df.iterrows():
             payload = {col: r.get(col, None) for col in DB_COLUMNS}
+            # Replace pandas NaN/NaT with Python ``None`` so SQLAlchemy doesn't
+            # attempt to insert them directly.
+            for k, v in payload.items():
+                if pd.isna(v):
+                    payload[k] = None
             # parse dates
             for dk in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
                 payload[dk] = parse_date_safe(payload.get(dk))
@@ -287,6 +292,9 @@ def import_from_excel_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
                 skipped += 1
                 continue
             payload = {col: r.get(col, None) for col in DB_COLUMNS}
+            for k, v in payload.items():
+                if pd.isna(v):
+                    payload[k] = None
             for dk in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
                 payload[dk] = parse_date_safe(payload.get(dk))
             obj = Lead(**payload)
@@ -340,11 +348,15 @@ def import_from_csv_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
             if pd.isna(r.get("meno_zakaznika")):
                 skipped += 1
                 continue
+            meno = r.get("meno_zakaznika")
+            email = r.get("email")
+            telefon = r.get("telefon")
+            dpc = r.get("datum_povodneho_kontaktu")
             obj = Lead(
-                meno_zakaznika=r.get("meno_zakaznika"),
-                email=r.get("email"),
-                telefon=r.get("telefon"),
-                datum_povodneho_kontaktu=r.get("datum_povodneho_kontaktu"),
+                meno_zakaznika=None if pd.isna(meno) else meno,
+                email=None if pd.isna(email) else email,
+                telefon=None if pd.isna(telefon) else telefon,
+                datum_povodneho_kontaktu=None if pd.isna(dpc) else dpc,
                 priorita="Stredná",
                 stav_leadu="Open"
             )

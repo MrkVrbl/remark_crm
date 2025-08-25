@@ -37,12 +37,22 @@ def normalize_df_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def parse_date_safe(val):
-    if val in [None, "", "NaT", "nat"]:
+    """Parse input into a ``date`` or return ``None``.
+
+    Historically this helper assumed values like ``np.nan`` or ``pd.NaT``
+    would be caught by ``pd.to_datetime``.  However, calling ``.date()`` on a
+    ``NaT`` results in a ``ValueError`` (``cannot convert float NaN to
+    integer``) which bubbled up during Excel/CSV imports.  To make the import
+    process robust we explicitly treat any "not a time"/"not a number" values
+    as ``None`` before attempting the conversion.
+    """
+    if val in [None, "", "NaT", "nat"] or pd.isna(val):
         return None
     if isinstance(val, date):
         return val
     try:
-        return pd.to_datetime(val, errors="coerce").date()
+        dt = pd.to_datetime(val, errors="coerce")
+        return None if pd.isna(dt) else dt.date()
     except Exception:
         return None
 
