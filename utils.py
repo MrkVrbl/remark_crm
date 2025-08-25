@@ -89,6 +89,7 @@ def categories_from_db(df: pd.DataFrame):
         "priorita": uniq("priorita") or ["Vysoká","Stredná","Nízka"],
         "typ_dopytu": uniq("typ_dopytu"),
         "mesto": uniq("mesto"),
+        "stav_projektu": uniq("stav_projektu"),
     }
 
 def unique_sorted(values):
