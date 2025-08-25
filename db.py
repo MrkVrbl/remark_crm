@@ -167,6 +167,12 @@ def fetch_leads_df(SessionLocal) -> pd.DataFrame:
             }
             data.append(d)
         df = pd.DataFrame(data)
+        # Ensure consistent ISO formatting for date columns
+        for col in ["datum_povodneho_kontaktu", "datum_dalsieho_kroku", "datum_realizacie"]:
+            if col in df.columns:
+                dt = pd.to_datetime(df[col], errors="coerce")
+                df[col] = dt.dt.strftime("%Y-%m-%d")
+                df.loc[dt.isna(), col] = None
         return df
     finally:
         session.close()
