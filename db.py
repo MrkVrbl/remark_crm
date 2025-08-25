@@ -175,13 +175,16 @@ COLUMN_ALIASES = {
     "stav projektu": "stav_projektu",
     "stav_projektu": "stav_projektu",
     "konkurencia": "konkurencia",
+    "kto je konkurencia": "konkurencia",
     "cena konkurencie": "cena_konkurencie",
     "cena_konkurencie": "cena_konkurencie",
     "naša ponuka orientačná": "nasa_ponuka_orientacna",
+    "nasa ponuka (orientacna)": "nasa_ponuka_orientacna",
     "nasa_ponuka_orientacna": "nasa_ponuka_orientacna",
     "reakcia zákazníka": "reakcia_zakaznika",
     "reakcia_zakaznika": "reakcia_zakaznika",
     "ďalší krok": "dalsi_krok",
+    "dohodnuty dalsi krok": "dalsi_krok",
     "dalsi_krok": "dalsi_krok",
     "dátum ďalšieho kroku": "datum_dalsieho_kroku",
     "datum_dalsieho_kroku": "datum_dalsieho_kroku",
@@ -189,6 +192,7 @@ COLUMN_ALIASES = {
     "stav leadu": "stav_leadu",
     "stav_leadu": "stav_leadu",
     "orientačná cena": "orientacna_cena",
+    "orientacna cena (eur)": "orientacna_cena",
     "orientacna_cena": "orientacna_cena",
     "dátum realizácie": "datum_realizacie",
     "datum_realizacie": "datum_realizacie",
@@ -257,6 +261,41 @@ def import_initial_from_excel(SessionLocal, excel_path: str) -> Tuple[int,int]:
     finally:
         session.close()
     return (imported, 0)
+
+def import_from_excel_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
+    """Import leads from an Excel file with columns like 'Meno zákazníka',
+    'Telefón', etc. Returns (imported, skipped)."""
+    import pandas as pd
+    if isinstance(file_or_buffer, (str, bytes, os.PathLike)):
+        df = pd.read_excel(file_or_buffer, engine="openpyxl")
+    else:
+        df = pd.read_excel(file_or_buffer, engine="openpyxl")
+
+    df = normalize_columns_generic(df, COLUMN_ALIASES)
+    df = clean_dataframe_for_db(df, DB_COLUMNS)
+
+    if "priorita" in df.columns:
+        df["priorita"] = df["priorita"].fillna("Stredná")
+    if "stav_leadu" in df.columns:
+        df["stav_leadu"] = df["stav_leadu"].fillna("Open")
+
+    imported, skipped = 0, 0
+    session = SessionLocal()
+    try:
+        for _, r in df.iterrows():
+            if pd.isna(r.get("meno_zakaznika")):
+                skipped += 1
+                continue
+            payload = {col: r.get(col, None) for col in DB_COLUMNS}
+            for dk in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
+                payload[dk] = parse_date_safe(payload.get(dk))
+            obj = Lead(**payload)
+            session.add(obj)
+            imported += 1
+        session.commit()
+    finally:
+        session.close()
+    return (imported, skipped)
 
 def import_from_csv_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
     """Import from CSV with mapping:

@@ -17,6 +17,7 @@ from db import (
     update_single_lead,
     import_initial_from_excel,
     import_from_csv_mapped,
+    import_from_excel_mapped,
     ensure_category_values,
 )
 from utils import (
@@ -71,10 +72,14 @@ with c2:
     if st.button("➕ Nový lead", use_container_width=True):
         st.session_state["show_new_lead_modal"] = True
 with c3:
-    uploaded_csv = st.file_uploader("Import CSV", type=["csv"], accept_multiple_files=False, label_visibility="collapsed")
-    if uploaded_csv is not None:
+    uploaded_file = st.file_uploader("Import Excel/CSV", type=["xlsx","xls","csv"], accept_multiple_files=False, label_visibility="collapsed")
+    if uploaded_file is not None:
         try:
-            imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_csv)
+            name = uploaded_file.name.lower()
+            if name.endswith((".xls", ".xlsx")):
+                imported, skipped = import_from_excel_mapped(SessionLocal, uploaded_file)
+            else:
+                imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_file)
             st.success(f"Importované: {imported}, Preskočené: {skipped}")
             df_all = fetch_leads_df(SessionLocal)
         except Exception as e:
@@ -84,9 +89,16 @@ with c4:
     if st.button("🔁 Obnoviť", use_container_width=True):
         df_all = fetch_leads_df(SessionLocal)
 with c5:
-    st.caption("Pozn.: Môžete tiež vložiť súbor 'leads.csv' do /mnt/data a obnoviť stránku.")
+    st.caption("Pozn.: Môžete tiež vložiť súbor 'leads.xlsx' alebo 'leads.csv' do /mnt/data a obnoviť stránku.")
 
-# Auto-import from default CSV path if available and not imported yet in this session
+# Auto-import from default Excel path if available and not imported yet in this session
+default_excel_path = "/data/leads.xlsx"
+if os.path.exists(default_excel_path) and not st.session_state.get("auto_excel_import_done"):
+    import_from_excel_mapped(SessionLocal, default_excel_path)
+    st.session_state["auto_excel_import_done"] = True
+    df_all = fetch_leads_df(SessionLocal)
+
+# Auto-import from default CSV path if available
 default_csv_path = "/data/leads.csv"
 if os.path.exists(default_csv_path) and not st.session_state.get("auto_csv_import_done"):
     import_from_csv_mapped(SessionLocal, default_csv_path)
