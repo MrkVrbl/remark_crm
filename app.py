@@ -86,9 +86,31 @@ for k, v in user_cats.items():
 with st.sidebar:
     st.header("Štatistiky")
     st.metric("Leadov", len(df_all))
-    st.metric("Po termíne", overdue)
-    st.metric("Dnes", today_cnt)
-    st.metric("Najbližších 7 dní", next7)
+    st.markdown(
+        """
+        <style>
+        .badge-box span {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+        .badge-overdue { background-color: #dc3545; color: white; }
+        .badge-today { background-color: #0d6efd; color: white; }
+        .badge-next7 { background-color: #ffc107; color: black; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<div class='badge-box'>"
+        f"<span class='badge-overdue'>Po termíne: {overdue}</span>"
+        f"<span class='badge-today'>Dnes: {today_cnt}</span>"
+        f"<span class='badge-next7'>Najbližších 7 dní: {next7}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
     st.header("Nastavenia")
     with st.form("settings_form", clear_on_submit=False):
@@ -113,7 +135,6 @@ with st.sidebar:
 
 # Header
 st.title("📋 REMARK CRM – Leads")
-st.caption(f"{today.strftime('%Y-%m-%d')} • Leadov: {len(df_all)}")
 
 c_search, c_new = st.columns([3,1])
 with c_search:
@@ -267,43 +288,34 @@ gb.configure_grid_options(
     quickFilterText=quick_search if quick_search else "",
 )
 
-# Row styling: by stav_leadu and priorita
+# Row styling: highlight by datum_dalsieho_kroku, stav_leadu and priorita
 row_style_js = JsCode("""
 function(params) {
     const v = params.data;
     if (!v) return {};
-    // Lost -> strike-through + grey
+    const raw = v.datum_dalsieho_kroku;
+    if (raw) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const dt = new Date(raw);
+        const diffDays = Math.floor((dt - today) / 86400000);
+        if (dt < today) return { 'backgroundColor':'#ffe6e6', 'fontWeight':'700' };
+        if (diffDays === 0) return { 'backgroundColor':'#e6f7ff', 'fontWeight':'700', 'border':'2px solid #66c2ff' };
+        if (diffDays <= 7) return { 'backgroundColor':'#fff8e6', 'fontWeight':'600' };
+    }
     if (v.stav_leadu === 'Lost') {
         return { 'textDecoration': 'line-through', 'color': '#666', 'backgroundColor': 'rgba(200,200,200,0.15)' };
     }
-    // Cold -> grey background wins
     if (v.stav_leadu === 'Cold') {
         return { 'backgroundColor': 'rgba(160,160,160,0.10)' };
     }
-    // otherwise by priority
     if (v.priorita === 'Vysoká') return { 'backgroundColor': 'rgba(255,0,0,0.08)' };
     if (v.priorita === 'Stredná') return { 'backgroundColor': 'rgba(255,165,0,0.10)' };
     if (v.priorita === 'Nízka') return { 'backgroundColor': 'rgba(0,120,255,0.08)' };
     return {};
 }
 """)
-# Cell style for next step date proximity
-date_cell_style_js = JsCode("""
-function(params) {
-  const raw = params.value;
-  if (!raw) return {};
-  const today = new Date(); today.setHours(0,0,0,0);
-  const dt = new Date(raw);
-  const diffDays = Math.floor((dt - today) / 86400000);
-  if (dt < today) return {'backgroundColor':'#ffe6e6', 'fontWeight':'700'}; // overdue
-  if (diffDays === 0) return {'backgroundColor':'#e6f7ff', 'fontWeight':'700', 'border':'2px solid #66c2ff'}; // today
-  if (diffDays <= 7) return {'backgroundColor':'#fff8e6', 'fontWeight':'600'}; // next 7
-  return {};
-}
-""")
 
 gb.configure_grid_options(getRowStyle=row_style_js)
-gb.configure_column("datum_dalsieho_kroku", cellStyle=date_cell_style_js)
 
 grid_options = gb.build()
 
