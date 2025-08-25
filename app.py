@@ -177,6 +177,12 @@ if col_state:
         df = df[ordered + remaining]
     width_map = {c["colId"]: c.get("width") for c in col_state if c.get("width")}
 
+# Ensure date columns render as strings
+for c in ["datum_povodneho_kontaktu", "datum_dalsieho_kroku", "datum_realizacie"]:
+    if c in df.columns:
+        s = pd.to_datetime(df[c], errors="coerce").dt.strftime("%Y-%m-%d")
+        df[c] = s.where(s.notna(), None)
+
 # Build AgGrid
 gb = GridOptionsBuilder.from_dataframe(df)
 gb.configure_default_column(
