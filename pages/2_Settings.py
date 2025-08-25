@@ -92,12 +92,15 @@ with st.form("grid_form"):
 st.subheader("Správa databázy")
 col1, col2, col3 = st.columns(3)
 with col1:
-    uploaded_db = st.file_uploader("Import databázy", type=["db"])
+    uploaded_db = st.file_uploader("Import databázy")
     if uploaded_db is not None:
-        with open(DB_PATH, "wb") as f:
-            f.write(uploaded_db.getbuffer())
-        st.success("Databáza importovaná")
-        st.experimental_rerun()
+        if uploaded_db.name.lower().endswith(".db"):
+            with open(DB_PATH, "wb") as f:
+                f.write(uploaded_db.getbuffer())
+            st.success("Databáza importovaná")
+            st.rerun()
+        else:
+            st.error("Nepodporovaný typ súboru. Nahrajte .db súbor.")
 with col2:
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "rb") as f:
@@ -108,4 +111,4 @@ with col3:
     if st.button("Vymazať databázu"):
         deleted = clear_database(SessionLocal)
         st.success(f"Vymazaných záznamov: {deleted}")
-        st.experimental_rerun()
+        st.rerun()

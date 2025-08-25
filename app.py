@@ -421,7 +421,7 @@ with right:
                 }
                 update_single_lead(SessionLocal, payload)
                 st.success("Uložené")
-                st.experimental_rerun()
+                st.rerun()
 
         # Quick actions
         st.markdown("#### ⚡ Rýchle akcie")
@@ -430,17 +430,17 @@ with right:
             new_status = st.selectbox("Zmeniť stav", stav_leadu_opts, index=(stav_leadu_opts.index(row.get("stav_leadu")) if row.get("stav_leadu") in stav_leadu_opts else 0), key=f"qa_stav_{rid}")
             if st.button("Uložiť stav", key=f"btn_stav_{rid}", use_container_width=True):
                 update_single_lead(SessionLocal, {"id": rid, "stav_leadu": new_status})
-                st.experimental_rerun()
+                st.rerun()
         with qa2:
             dk = st.text_input("Ďalší krok", value=row.get("dalsi_krok",""), key=f"qa_dk_{rid}")
             dkd = st.date_input("Dátum kroku", value=parse_date_safe(row.get("datum_dalsieho_kroku")), key=f"qa_dkd_{rid}")
             if st.button("Nastaviť krok", key=f"btn_krok_{rid}", use_container_width=True):
                 update_single_lead(SessionLocal, {"id": rid, "dalsi_krok": dk, "datum_dalsieho_kroku": dkd})
-                st.experimental_rerun()
+                st.rerun()
         with qa3:
             if st.button("✅ Konvertovať", key=f"btn_conv_{rid}", type="primary", use_container_width=True):
                 update_single_lead(SessionLocal, {"id": rid, "stav_leadu": "Converted", "datum_realizacie": date.today()})
-                st.experimental_rerun()
+                st.rerun()
     else:
         st.info("Vyberte riadok v tabuľke pre zobrazenie detailu a akcií.")
 
@@ -534,12 +534,12 @@ with f1:
                 imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_file)
             remove_duplicate_leads(SessionLocal)
             st.success(f"Importované: {imported}, Preskočené: {skipped}")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Import zlyhal: {e}")
 with f2:
     if st.button("🔁 Obnoviť", use_container_width=True):
-        st.experimental_rerun()
+        st.rerun()
 with f3:
     st.caption("Pozn.: Môžete tiež vložiť súbor 'leads.xlsx' alebo 'leads.csv' do /mnt/data a obnoviť stránku.")
 
