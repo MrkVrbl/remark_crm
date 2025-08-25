@@ -25,8 +25,8 @@ for col in all_columns:
 
 saved_cats = load_category_prefs()
 
-with st.form("settings_form"):
-    st.subheader("Preddefinované hodnoty")
+st.subheader("Preddefinované hodnoty")
+with st.form("cats_form"):
     selected_cols = st.multiselect(
         "Stĺpce s výberom",
         options=all_columns,
@@ -37,45 +37,53 @@ with st.form("settings_form"):
         existing = saved_cats.get(col, cats_db.get(col, []))
         cat_inputs[col] = st.text_input(col, value=",".join(existing))
 
-    st.subheader("Poradie a šírka stĺpcov")
-    grid_prefs = load_grid_prefs()
-    col_state = grid_prefs.get("column_state", [])
-    state_map = {c["colId"]: c for c in col_state}
-    rows = []
-    for idx, col in enumerate(all_columns):
-        st_info = state_map.get(col, {})
-        rows.append({
-            "column": col,
-            "order": st_info.get("order", idx),
-            "width": st_info.get("width", ""),
-        })
-    df_state = pd.DataFrame(rows)
-    edited = st.data_editor(
-        df_state,
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "column": st.column_config.TextColumn("Stĺpec", disabled=True),
-            "order": st.column_config.NumberColumn("Poradie"),
-            "width": st.column_config.NumberColumn("Šírka", required=False),
-        },
-    )
-
-    submitted = st.form_submit_button("Uložiť")
-    if submitted:
+    cats_submitted = st.form_submit_button("Uložiť")
+    if cats_submitted:
         new_cats = {}
         for col in selected_cols:
             val = cat_inputs[col]
             new_cats[col] = [s.strip() for s in val.split(",") if s.strip()]
         save_category_prefs(new_cats)
+        st.success("Preddefinované hodnoty uložené")
 
+st.subheader("Poradie a šírka stĺpcov")
+grid_prefs = load_grid_prefs()
+col_state = grid_prefs.get("column_state", [])
+state_map = {c["colId"]: c for c in col_state}
+ordered_cols = sorted(
+    all_columns,
+    key=lambda c: state_map.get(c, {}).get("order", all_columns.index(c)),
+)
+rows = []
+for col in ordered_cols:
+    st_info = state_map.get(col, {})
+    rows.append({
+        "column": col,
+        "width": st_info.get("width"),
+    })
+df_state = pd.DataFrame(rows)
+df_state.index.name = "poradie"
+
+with st.form("grid_form"):
+    edited = st.data_editor(
+        df_state,
+        use_container_width=True,
+        column_config={
+            "_index": st.column_config.NumberColumn("Poradie", disabled=True),
+            "column": st.column_config.TextColumn("Stĺpec", disabled=True),
+            "width": st.column_config.NumberColumn("Šírka", required=False),
+        },
+        key="grid_editor",
+    )
+
+    grid_submitted = st.form_submit_button("Uložiť")
+    if grid_submitted:
         new_col_state = []
-        edited_sorted = edited.sort_values("order")
-        for _, row in edited_sorted.iterrows():
-            state = {"colId": row["column"], "order": int(row["order"])}
-            if pd.notna(row["width"]) and str(row["width"]).strip() != "":
-                state["width"] = int(row["width"])
+        for order, row in enumerate(edited.itertuples(index=False)):
+            state = {"colId": row.column, "order": order}
+            if pd.notna(row.width) and str(row.width).strip() != "":
+                state["width"] = int(row.width)
             new_col_state.append(state)
         save_grid_prefs({"column_state": new_col_state})
-
-        st.success("Uložené")
+        st.success("Poradie a šírka stĺpcov uložené")
+        st.switch_page("app.py")
