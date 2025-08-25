@@ -371,10 +371,13 @@ with right:
     else:
         st.info("Vyberte riadok v tabuľke pre zobrazenie detailu a akcií.")
 
-# --- New lead modal ---
+# --- New lead dialog ---
 if st.session_state.get("show_new_lead_modal"):
-    with st.modal("Nový lead"):
-        st.write("Vyplňte údaje. Položky *Meno*, aspoň jeden kontakt (*Telefón* alebo *Email*) a *Dátum pôvodného kontaktu* sú povinné.")
+    @st.dialog("Nový lead")
+    def new_lead_dialog():
+        st.write(
+            "Vyplňte údaje. Položky *Meno*, aspoň jeden kontakt (*Telefón* alebo *Email*) a *Dátum pôvodného kontaktu* sú povinné."
+        )
         with st.form("new_lead_form", clear_on_submit=True):
             meno = st.text_input("Meno zákazníka*")
             tel = st.text_input("Telefón")
@@ -425,15 +428,17 @@ if st.session_state.get("show_new_lead_modal"):
                         stav_leadu=stavlead,
                         orientacna_cena=oc,
                         datum_realizacie=dr,
-                        poznamky=poz.strip()
+                        poznamky=poz.strip(),
                     )
                     insert_lead(SessionLocal, payload)
                     st.success("Lead pridaný.")
                     st.session_state["show_new_lead_modal"] = False
-                    st.experimental_rerun()
+                    st.rerun()
         if st.button("Zavrieť"):
             st.session_state["show_new_lead_modal"] = False
-            st.experimental_rerun()
+            st.rerun()
+
+    new_lead_dialog()
 
 # --- Add new lead form ---
 with st.form("Pridať nový lead"):
@@ -442,7 +447,12 @@ with st.form("Pridať nový lead"):
     datum_kroku = st.date_input("Dátum ďalšieho kroku")
     submitted = st.form_submit_button("Pridať")
     if submitted:
-        insert_lead(SessionLocal, meno=meno, email=email, datum_dalsieho_kroku=datum_kroku)
+        payload = {
+            "meno_zakaznika": meno,
+            "email": email,
+            "datum_dalsieho_kroku": datum_kroku,
+        }
+        insert_lead(SessionLocal, payload)
         st.success("Lead pridaný!")
 
 st.caption("⏱️ Časová zóna: Europe/Bratislava")
