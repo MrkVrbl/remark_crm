@@ -29,6 +29,7 @@ streamlit run app.py
 - Pri prvom spustení sa databáza naplní zo súboru **/mnt/data/CRM_leads_REMARK_FIXED.xlsx** (sheet **Leads**), ak existuje.
 - Následne môžete:
   - pridávať leady manuálne cez tlačidlo **„Nový lead“**,
+  - importovať Excel so stĺpcami: *Meno zákazníka, Telefón, Email, Mesto, Typ dopytu, Dátum pôvodného kontaktu, Stav projektu, Kto je konkurencia, Cena konkurencie, Naša ponuka (orientačná), Reakcia zákazníka, Dohodnutý ďalší krok, Dátum ďalšieho kroku, Priorita, Stav leadu, Orientačná cena (€), Dátum realizácie, Poznámky*,
   - alebo importovať CSV (mapovanie: `Meno`→Meno zákazníka, `Email`→Email, `Phone`→Telefón, `Vytovorene`→Dátum pôvodného kontaktu).
 - Databáza sa ukladá do súboru **remark_crm.db** v koreňovom priečinku projektu.
 
