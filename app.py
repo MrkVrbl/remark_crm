@@ -319,7 +319,11 @@ grid_resp = AgGrid(
     ],
 )
 
-current_df = pd.DataFrame(grid_resp["data"])
+grid_data = grid_resp.get("data")
+if grid_data is None:
+    current_df = df.copy()
+else:
+    current_df = pd.DataFrame(grid_data)
 selected_rows = grid_resp.get("selected_rows", [])
 
 # Detect inline edits by comparing current_df to last_grid_df for editable columns
