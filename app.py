@@ -187,7 +187,7 @@ for col in df.columns:
     else:
         gb.configure_column(col)
 
-gb.configure_selection('single', use_checkbox=True)
+gb.configure_selection('single', use_checkbox=False)
 gb.configure_side_bar()
 gb.configure_grid_options(
     rowSelection="single",
