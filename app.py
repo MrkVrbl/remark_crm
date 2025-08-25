@@ -47,14 +47,6 @@ except Exception as e:
 
 # Ensure no duplicate leads exist
 remove_duplicate_leads(SessionLocal)
-
-"""
-Reorder data import steps so statistics (overdue, today, next7) and header
-counts are computed after any automatic imports. Previously the sidebar was
-rendered before auto-imports, causing the metrics to stay at zero even when
-new leads were imported later in the script.
-"""
-
 # --- Auto-imports before fetching data ---
 # (runs only once per session if files exist)
 default_excel_path = "/data/leads.xlsx"
