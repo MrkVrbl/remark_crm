@@ -454,3 +454,14 @@ def import_from_csv_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
 def ensure_category_values(SessionLocal):
     """Optional: ensure there is at least one value for select boxes."""
     pass
+
+
+def clear_database(SessionLocal) -> int:
+    """Delete all leads from the database."""
+    session: Session = SessionLocal()
+    try:
+        deleted = session.query(Lead).delete()
+        session.commit()
+        return deleted
+    finally:
+        session.close()
