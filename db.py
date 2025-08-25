@@ -4,7 +4,7 @@ import os
 from datetime import date, datetime
 from typing import List, Tuple, Dict, Any, Optional
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date, Text
+from sqlalchemy import create_engine, Column, Integer, String, Float, Date, Text, or_
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.session import Session
@@ -38,6 +38,78 @@ class Lead(Base):
     orientacna_cena = Column(Float)
     datum_realizacie = Column(Date)
     poznamky = Column(Text)
+
+
+def is_duplicate_lead(session: Session, payload: Dict[str, Any]) -> bool:
+    """Return True if a lead with at least two matching fields exists."""
+    name = payload.get("meno_zakaznika")
+    phone = payload.get("telefon")
+    email = payload.get("email")
+    dpc = parse_date_safe(payload.get("datum_povodneho_kontaktu"))
+
+    filters = []
+    if name:
+        filters.append(Lead.meno_zakaznika == name)
+    if phone:
+        filters.append(Lead.telefon == phone)
+    if email:
+        filters.append(Lead.email == email)
+    if dpc:
+        filters.append(Lead.datum_povodneho_kontaktu == dpc)
+    if not filters:
+        return False
+
+    candidates = session.query(Lead).filter(or_(*filters)).all()
+    for c in candidates:
+        matches = 0
+        if name and c.meno_zakaznika == name:
+            matches += 1
+        if phone and c.telefon == phone:
+            matches += 1
+        if email and c.email == email:
+            matches += 1
+        if dpc and c.datum_povodneho_kontaktu == dpc:
+            matches += 1
+        if matches >= 2:
+            return True
+    return False
+
+
+def remove_duplicate_leads(SessionLocal) -> int:
+    """Delete duplicate leads based on matching at least two key fields."""
+    session: Session = SessionLocal()
+    removed = 0
+    try:
+        leads = session.query(Lead).all()
+        to_delete = set()
+        for i, a in enumerate(leads):
+            if a.id in to_delete:
+                continue
+            for b in leads[i + 1 :]:
+                if b.id in to_delete:
+                    continue
+                matches = 0
+                if a.meno_zakaznika and b.meno_zakaznika and a.meno_zakaznika == b.meno_zakaznika:
+                    matches += 1
+                if a.telefon and b.telefon and a.telefon == b.telefon:
+                    matches += 1
+                if a.email and b.email and a.email == b.email:
+                    matches += 1
+                if (
+                    a.datum_povodneho_kontaktu
+                    and b.datum_povodneho_kontaktu
+                    and a.datum_povodneho_kontaktu == b.datum_povodneho_kontaktu
+                ):
+                    matches += 1
+                if matches >= 2:
+                    to_delete.add(b.id)
+        if to_delete:
+            session.query(Lead).filter(Lead.id.in_(to_delete)).delete(synchronize_session=False)
+            session.commit()
+            removed = len(to_delete)
+        return removed
+    finally:
+        session.close()
 
 def get_engine_session():
     engine = create_engine(DATABASE_URL, echo=False, future=True)
@@ -88,6 +160,8 @@ def fetch_leads_df(SessionLocal) -> pd.DataFrame:
 def insert_lead(SessionLocal, payload: Dict[str, Any]) -> int:
     session: Session = SessionLocal()
     try:
+        if is_duplicate_lead(session, payload):
+            return 0
         obj = Lead(
             meno_zakaznika=payload.get("meno_zakaznika"),
             telefon=payload.get("telefon"),
@@ -259,6 +333,8 @@ def import_initial_from_excel(SessionLocal, excel_path: str) -> Tuple[int,int]:
             # parse dates
             for dk in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
                 payload[dk] = parse_date_safe(payload.get(dk))
+            if is_duplicate_lead(session, payload):
+                continue
             obj = Lead(**payload)
             session.add(obj)
             imported += 1
@@ -297,6 +373,9 @@ def import_from_excel_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
                     payload[k] = None
             for dk in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
                 payload[dk] = parse_date_safe(payload.get(dk))
+            if is_duplicate_lead(session, payload):
+                skipped += 1
+                continue
             obj = Lead(**payload)
             session.add(obj)
             imported += 1
@@ -352,14 +431,18 @@ def import_from_csv_mapped(SessionLocal, file_or_buffer) -> Tuple[int,int]:
             email = r.get("email")
             telefon = r.get("telefon")
             dpc = r.get("datum_povodneho_kontaktu")
-            obj = Lead(
+            payload = dict(
                 meno_zakaznika=None if pd.isna(meno) else meno,
                 email=None if pd.isna(email) else email,
                 telefon=None if pd.isna(telefon) else telefon,
                 datum_povodneho_kontaktu=None if pd.isna(dpc) else dpc,
                 priorita="Stredná",
-                stav_leadu="Open"
+                stav_leadu="Open",
             )
+            if is_duplicate_lead(session, payload):
+                skipped += 1
+                continue
+            obj = Lead(**payload)
             session.add(obj)
             imported += 1
         session.commit()
