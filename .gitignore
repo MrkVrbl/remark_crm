@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.env
+.env
+*.sqlite3
+*.db
+
+# VS Code
+.vscode/
+.history/
+
+# Streamlit
+.streamlit/
+
+# Data files
+/data/
+*.xlsx
+*.xls
+*.csv
+
+# Virtual environments
+.crmvenv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
