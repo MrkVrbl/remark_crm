@@ -12,7 +12,21 @@ import io
 
 from utils import normalize_columns_generic, clean_dataframe_for_db, parse_date_safe
 
-DB_PATH = os.environ.get("REMARK_CRM_DB", "remark_crm.db")
+"""Database configuration.
+
+By default the application stored its SQLite database inside the project
+directory (``remark_crm.db``).  On platforms where the repository is
+re‑created for every deployment – such as Streamlit Cloud – this meant the
+database was wiped on each rebuild and any data entered through the app was
+lost.  The most noticeable effect was that the column
+``datum_dalsieho_kroku`` appeared empty after every new deploy.
+
+To persist data across app rebuilds we now place the database in the
+platform's persistent storage folder ``/data`` unless an explicit path is
+provided via the ``REMARK_CRM_DB`` environment variable.
+"""
+
+DB_PATH = os.environ.get("REMARK_CRM_DB", "/data/remark_crm.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 Base = declarative_base()

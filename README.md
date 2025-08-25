@@ -31,7 +31,9 @@ streamlit run app.py
   - pridávať leady manuálne cez tlačidlo **„Nový lead“**,
   - importovať Excel so stĺpcami: *Meno zákazníka, Telefón, Email, Mesto, Typ dopytu, Dátum pôvodného kontaktu, Stav projektu, Kto je konkurencia, Cena konkurencie, Naša ponuka (orientačná), Reakcia zákazníka, Dohodnutý ďalší krok, Dátum ďalšieho kroku, Priorita, Stav leadu, Orientačná cena (€), Dátum realizácie, Poznámky*,
   - alebo importovať CSV (mapovanie: `Meno`→Meno zákazníka, `Email`→Email, `Phone`→Telefón, `Vytovorene`→Dátum pôvodného kontaktu).
-- Databáza sa ukladá do súboru **remark_crm.db** v koreňovom priečinku projektu.
+- Databáza sa štandardne ukladá do súboru **/data/remark_crm.db**, ktorý sa
+  zachová aj po rebuilde aplikácie.  Cestu je možné prepísať premennou
+  prostredia `REMARK_CRM_DB`.
 
 ## Poznámky
 - Časová zóna: **Europe/Bratislava** (pre výpočty termínov).
