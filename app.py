@@ -25,7 +25,6 @@ from utils import (
 )
 from prefs import (
     load_grid_prefs,
-    save_grid_prefs,
     load_category_prefs,
 )
 
@@ -316,13 +315,6 @@ grid_resp = AgGrid(
 
 current_df = pd.DataFrame(grid_resp["data"])
 selected_rows = grid_resp.get("selected_rows", [])
-
-# Save column state preferences
-try:
-    if grid_resp.columns_state:
-        save_grid_prefs({"column_state": grid_resp.columns_state})
-except Exception:
-    pass
 
 # Detect inline edits by comparing current_df to last_grid_df for editable columns
 try:
