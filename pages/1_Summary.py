@@ -11,11 +11,12 @@ from utils import slovak_tz_now_date, badges_counts
 
 st.set_page_config(page_title="REMARK CRM - Summary", page_icon="📈", layout="wide")
 
+today = slovak_tz_now_date()
 st.title("📈 Summary & Štatistiky")
+st.caption(today.strftime("%Y-%m-%d"))
 
 engine, SessionLocal = get_engine_session()
 df = fetch_leads_df(SessionLocal)
-today = slovak_tz_now_date()
 
 if df.empty:
     st.info("Zatiaľ nemáme žiadne dáta.")

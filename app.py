@@ -48,7 +48,29 @@ except Exception as e:
 # Ensure no duplicate leads exist
 remove_duplicate_leads(SessionLocal)
 
-# Fetch data and stats
+"""
+Reorder data import steps so statistics (overdue, today, next7) and header
+counts are computed after any automatic imports. Previously the sidebar was
+rendered before auto-imports, causing the metrics to stay at zero even when
+new leads were imported later in the script.
+"""
+
+# --- Auto-imports before fetching data ---
+# (runs only once per session if files exist)
+default_excel_path = "/data/leads.xlsx"
+if os.path.exists(default_excel_path) and not st.session_state.get("auto_excel_import_done"):
+    import_from_excel_mapped(SessionLocal, default_excel_path)
+    st.session_state["auto_excel_import_done"] = True
+
+default_csv_path = "/data/leads.csv"
+if os.path.exists(default_csv_path) and not st.session_state.get("auto_csv_import_done"):
+    import_from_csv_mapped(SessionLocal, default_csv_path)
+    st.session_state["auto_csv_import_done"] = True
+
+# Remove duplicates again after potential imports
+remove_duplicate_leads(SessionLocal)
+
+# Fetch data and stats after all imports
 df_all = fetch_leads_df(SessionLocal)
 today = slovak_tz_now_date()
 overdue, today_cnt, next7 = badges_counts(df_all, today)
@@ -99,22 +121,6 @@ with c_search:
 with c_new:
     if st.button("➕ Nový lead", use_container_width=True):
         st.session_state["show_new_lead_modal"] = True
-
-# Auto-import from default Excel path if available and not imported yet in this session
-default_excel_path = "/data/leads.xlsx"
-if os.path.exists(default_excel_path) and not st.session_state.get("auto_excel_import_done"):
-    import_from_excel_mapped(SessionLocal, default_excel_path)
-    remove_duplicate_leads(SessionLocal)
-    st.session_state["auto_excel_import_done"] = True
-    df_all = fetch_leads_df(SessionLocal)
-
-# Auto-import from default CSV path if available
-default_csv_path = "/data/leads.csv"
-if os.path.exists(default_csv_path) and not st.session_state.get("auto_csv_import_done"):
-    import_from_csv_mapped(SessionLocal, default_csv_path)
-    remove_duplicate_leads(SessionLocal)
-    st.session_state["auto_csv_import_done"] = True
-    df_all = fetch_leads_df(SessionLocal)
 
 # --- Filter panel ---
 with st.expander("🔎 Filtery", expanded=False):
