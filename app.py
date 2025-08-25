@@ -27,7 +27,6 @@ from prefs import (
     load_grid_prefs,
     save_grid_prefs,
     load_category_prefs,
-    save_category_prefs,
 )
 
 st.set_page_config(page_title="REMARK CRM - Leads", page_icon="📋", layout="wide")
@@ -112,26 +111,8 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.markdown("---")
-    st.header("Nastavenia")
-    with st.form("settings_form", clear_on_submit=False):
-        st.write("Možnosti pre stĺpce (oddelené čiarkou)")
-        stav_leadu_text = st.text_input("Stav leadu", ",".join(cats["stav_leadu"]))
-        priorita_text = st.text_input("Priorita", ",".join(cats["priorita"]))
-        stav_proj_text = st.text_input("Stav projektu", ",".join(cats.get("stav_projektu", [])))
-        typ_dopytu_text = st.text_input("Typ dopytu", ",".join(cats["typ_dopytu"]))
-        mesto_text = st.text_input("Mesto", ",".join(cats["mesto"]))
-        saved_settings = st.form_submit_button("Uložiť")
-        if saved_settings:
-            new_settings = {
-                "stav_leadu": [s.strip() for s in stav_leadu_text.split(",") if s.strip()],
-                "priorita": [s.strip() for s in priorita_text.split(",") if s.strip()],
-                "stav_projektu": [s.strip() for s in stav_proj_text.split(",") if s.strip()],
-                "typ_dopytu": [s.strip() for s in typ_dopytu_text.split(",") if s.strip()],
-                "mesto": [s.strip() for s in mesto_text.split(",") if s.strip()],
-            }
-            save_category_prefs(new_settings)
-            st.success("Uložené")
-            st.experimental_rerun()
+    if st.button("⚙️ Nastavenia", use_container_width=True):
+        st.switch_page("pages/2_Settings.py")
 
 # Header
 st.title("📋 REMARK CRM – Leads")
