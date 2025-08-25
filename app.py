@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
-import io
-from datetime import datetime, date, timedelta
-import pytz
+from datetime import date
 import pandas as pd
-import numpy as np
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
@@ -18,17 +15,19 @@ from db import (
     import_initial_from_excel,
     import_from_csv_mapped,
     import_from_excel_mapped,
-    ensure_category_values,
     remove_duplicate_leads,
 )
 from utils import (
     slovak_tz_now_date,
-    normalize_df_columns,
-    clean_dataframe_for_db,
     badges_counts,
     parse_date_safe,
     categories_from_db,
-    unique_sorted,
+)
+from prefs import (
+    load_grid_prefs,
+    save_grid_prefs,
+    load_category_prefs,
+    save_category_prefs,
 )
 
 st.set_page_config(page_title="REMARK CRM - Leads", page_icon="📋", layout="wide")
@@ -49,52 +48,57 @@ except Exception as e:
 # Ensure no duplicate leads exist
 remove_duplicate_leads(SessionLocal)
 
-# Top header
-st.title("📋 REMARK CRM – Leads")
-
-# Info badges (next steps)
+# Fetch data and stats
 df_all = fetch_leads_df(SessionLocal)
 today = slovak_tz_now_date()
-
 overdue, today_cnt, next7 = badges_counts(df_all, today)
-badge_html = f"""
-<div style='display:flex; gap:12px; flex-wrap:wrap; margin-top: -6px; margin-bottom: 8px;'>
-  <div style='background:#ffe6e6; color:#a30000; padding:6px 10px; border-radius:999px; font-weight:600;'>🔴 Po termíne: {overdue}</div>
-  <div style='background:#e6f7ff; color:#004d80; padding:6px 10px; border-radius:999px; font-weight:700; border:2px solid #66c2ff;'>📌 Dnes: {today_cnt}</div>
-  <div style='background:#fff8e6; color:#8a5a00; padding:6px 10px; border-radius:999px; font-weight:600;'>🟡 Najbližších 7 dní: {next7}</div>
-  <div style='margin-left:6px; opacity:0.8;'>Dnešný dátum: {today.strftime('%Y-%m-%d')}</div>
-</div>
-"""
-st.markdown(badge_html, unsafe_allow_html=True)
 
-# --- Controls row ---
-c1, c2, c3, c4, c5 = st.columns([1,1,1,1,2])
-with c1:
-    st.caption("Full‑text vyhľadávanie")
+# Load category preferences
+cats = categories_from_db(df_all)
+user_cats = load_category_prefs()
+for k, v in user_cats.items():
+    if isinstance(v, list) and v:
+        cats[k] = v
+
+# Sidebar with stats and settings
+with st.sidebar:
+    st.header("Štatistiky")
+    st.metric("Leadov", len(df_all))
+    st.metric("Po termíne", overdue)
+    st.metric("Dnes", today_cnt)
+    st.metric("Najbližších 7 dní", next7)
+    st.markdown("---")
+    st.header("Nastavenia")
+    with st.form("settings_form", clear_on_submit=False):
+        st.write("Možnosti pre stĺpce (oddelené čiarkou)")
+        stav_leadu_text = st.text_input("Stav leadu", ",".join(cats["stav_leadu"]))
+        priorita_text = st.text_input("Priorita", ",".join(cats["priorita"]))
+        stav_proj_text = st.text_input("Stav projektu", ",".join(cats.get("stav_projektu", [])))
+        typ_dopytu_text = st.text_input("Typ dopytu", ",".join(cats["typ_dopytu"]))
+        mesto_text = st.text_input("Mesto", ",".join(cats["mesto"]))
+        saved_settings = st.form_submit_button("Uložiť")
+        if saved_settings:
+            new_settings = {
+                "stav_leadu": [s.strip() for s in stav_leadu_text.split(",") if s.strip()],
+                "priorita": [s.strip() for s in priorita_text.split(",") if s.strip()],
+                "stav_projektu": [s.strip() for s in stav_proj_text.split(",") if s.strip()],
+                "typ_dopytu": [s.strip() for s in typ_dopytu_text.split(",") if s.strip()],
+                "mesto": [s.strip() for s in mesto_text.split(",") if s.strip()],
+            }
+            save_category_prefs(new_settings)
+            st.success("Uložené")
+            st.experimental_rerun()
+
+# Header
+st.title("📋 REMARK CRM – Leads")
+st.caption(f"{today.strftime('%Y-%m-%d')} • Leadov: {len(df_all)}")
+
+c_search, c_new = st.columns([3,1])
+with c_search:
     quick_search = st.text_input("Hľadať", placeholder="meno, email, mesto, poznámky ...", label_visibility="collapsed")
-with c2:
+with c_new:
     if st.button("➕ Nový lead", use_container_width=True):
         st.session_state["show_new_lead_modal"] = True
-with c3:
-    uploaded_file = st.file_uploader("Import Excel/CSV", type=["xlsx","xls","csv"], accept_multiple_files=False, label_visibility="collapsed")
-    if uploaded_file is not None:
-        try:
-            name = uploaded_file.name.lower()
-            if name.endswith((".xls", ".xlsx")):
-                imported, skipped = import_from_excel_mapped(SessionLocal, uploaded_file)
-            else:
-                imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_file)
-            remove_duplicate_leads(SessionLocal)
-            st.success(f"Importované: {imported}, Preskočené: {skipped}")
-            df_all = fetch_leads_df(SessionLocal)
-        except Exception as e:
-            st.error(f"Import zlyhal: {e}")
-with c4:
-    # quick refresh
-    if st.button("🔁 Obnoviť", use_container_width=True):
-        df_all = fetch_leads_df(SessionLocal)
-with c5:
-    st.caption("Pozn.: Môžete tiež vložiť súbor 'leads.xlsx' alebo 'leads.csv' do /mnt/data a obnoviť stránku.")
 
 # Auto-import from default Excel path if available and not imported yet in this session
 default_excel_path = "/data/leads.xlsx"
@@ -144,13 +148,34 @@ if quick_search:
     q = quick_search.lower().strip()
     if q:
         mask = pd.Series(False, index=df.index)
-        for col in ["meno_zakaznika","telefon","email","mesto","typ_dopytu","stav_projektu","reakcia_zakaznika","dalsi_krok","poznamky"]:
+        for col in [
+            "meno_zakaznika",
+            "telefon",
+            "email",
+            "mesto",
+            "typ_dopytu",
+            "stav_projektu",
+            "reakcia_zakaznika",
+            "dalsi_krok",
+            "poznamky",
+        ]:
             if col in df.columns:
                 mask = mask | df[col].fillna("").str.lower().str.contains(q)
         df = df[mask]
 
 # Editable fields inline
-editable_cols = ["stav_leadu","priorita","stav_projektu","dalsi_krok","datum_dalsieho_kroku","poznamky","nasa_ponuka_orientacna"]
+editable_cols = [c for c in df.columns if c != "id"]
+
+# Load grid preferences (order/width)
+grid_prefs = load_grid_prefs()
+col_state = grid_prefs.get("column_state")
+width_map = {}
+if col_state:
+    ordered = [c["colId"] for c in sorted(col_state, key=lambda x: x.get("order", 0)) if c.get("colId") in df.columns]
+    remaining = [c for c in df.columns if c not in ordered]
+    if ordered:
+        df = df[ordered + remaining]
+    width_map = {c["colId"]: c.get("width") for c in col_state if c.get("width")}
 
 # Build AgGrid
 gb = GridOptionsBuilder.from_dataframe(df)
@@ -158,37 +183,70 @@ gb.configure_default_column(
     sortable=True,
     filter=True,
     resizable=True,
+    editable=True,
 )
 
-# Select editors for certain columns based on unique values from DB
-stav_leadu_opts = unique_sorted(df_all["stav_leadu"].dropna().tolist() + ["Open","Cold","Converted","Lost"])
-priorita_opts = unique_sorted(df_all["priorita"].dropna().tolist() + ["Vysoká","Stredná","Nízka"])
-stav_proj_opts = unique_sorted(df_all["stav_projektu"].dropna().tolist())
-typ_dopytu_opts = unique_sorted(df_all["typ_dopytu"].dropna().tolist())
+# Select editors for certain columns based on preferences
+stav_leadu_opts = cats["stav_leadu"]
+priorita_opts = cats["priorita"]
+stav_proj_opts = cats.get("stav_projektu", [])
+typ_dopytu_opts = cats["typ_dopytu"]
+mesto_opts = cats["mesto"]
 
 # Configure columns
 for col in df.columns:
+    col_width = width_map.get(col)
     if col == "id":
         gb.configure_column(col, header_name="ID", hide=True)
-    elif col in ["nasa_ponuka_orientacna","orientacna_cena","cena_konkurencie"]:
-        gb.configure_column(col, type=["numericColumn","numberColumnFilter","customNumericFormat"], valueFormatter="value==null? '': value.toLocaleString()")
-    elif col in ["datum_povodneho_kontaktu","datum_dalsieho_kroku","datum_realizacie"]:
-        gb.configure_column(col, filter="agDateColumnFilter")
+    elif col in ["nasa_ponuka_orientacna", "orientacna_cena", "cena_konkurencie"]:
+        gb.configure_column(
+            col,
+            type=["numericColumn", "numberColumnFilter", "customNumericFormat"],
+            valueFormatter="value==null? '' : value.toLocaleString()",
+            width=col_width,
+        )
+    elif col in ["datum_povodneho_kontaktu", "datum_dalsieho_kroku", "datum_realizacie"]:
+        gb.configure_column(col, filter="agDateColumnFilter", width=col_width)
     elif col == "stav_leadu":
-        gb.configure_column(col, editable=True, cellEditor="agSelectCellEditor", cellEditorParams={"values": stav_leadu_opts})
+        gb.configure_column(
+            col,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": stav_leadu_opts},
+            width=col_width,
+        )
     elif col == "priorita":
-        gb.configure_column(col, editable=True, cellEditor="agSelectCellEditor", cellEditorParams={"values": priorita_opts})
+        gb.configure_column(
+            col,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": priorita_opts},
+            width=col_width,
+        )
     elif col == "stav_projektu":
-        gb.configure_column(col, editable=True, cellEditor="agSelectCellEditor", cellEditorParams={"values": stav_proj_opts})
+        gb.configure_column(
+            col,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": stav_proj_opts},
+            width=col_width,
+        )
     elif col == "typ_dopytu":
-        gb.configure_column(col, cellEditor="agSelectCellEditor", cellEditorParams={"values": typ_dopytu_opts})
-    elif col in editable_cols:
-        gb.configure_column(col, editable=True)
+        gb.configure_column(
+            col,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": typ_dopytu_opts},
+            width=col_width,
+        )
+    elif col == "mesto":
+        gb.configure_column(
+            col,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": mesto_opts},
+            width=col_width,
+        )
     else:
-        gb.configure_column(col)
+        if col_width:
+            gb.configure_column(col, width=col_width)
 
-gb.configure_selection('single', use_checkbox=True)
-gb.configure_side_bar()
+gb.configure_selection('single', use_checkbox=False)
 gb.configure_grid_options(
     rowSelection="single",
     rowMultiSelectWithClick=False,
@@ -255,11 +313,25 @@ grid_resp = AgGrid(
     theme="balham",
     height=560,
     fit_columns_on_grid_load=True,
-    allow_unsafe_jscode=True
+    allow_unsafe_jscode=True,
+    columns_state=col_state,
+    update_on=[
+        "cellValueChanged",
+        "selectionChanged",
+        "columnResized",
+        "columnMoved",
+    ],
 )
 
 current_df = pd.DataFrame(grid_resp["data"])
 selected_rows = grid_resp.get("selected_rows", [])
+
+# Save column state preferences
+try:
+    if grid_resp.columns_state:
+        save_grid_prefs({"column_state": grid_resp.columns_state})
+except Exception:
+    pass
 
 # Detect inline edits by comparing current_df to last_grid_df for editable columns
 try:
@@ -314,7 +386,12 @@ with right:
             st.text_input("Meno zákazníka", key=f"meno_{rid}", value=row.get("meno_zakaznika",""))
             st.text_input("Telefón", key=f"tel_{rid}", value=row.get("telefon",""))
             st.text_input("Email", key=f"email_{rid}", value=row.get("email",""))
-            st.text_input("Mesto", key=f"mesto_{rid}", value=row.get("mesto",""))
+            st.selectbox(
+                "Mesto",
+                options=mesto_opts or [row.get("mesto", "")],
+                index=(mesto_opts.index(row.get("mesto")) if row.get("mesto") in mesto_opts else 0) if mesto_opts else 0,
+                key=f"mesto_{rid}",
+            )
             st.selectbox("Typ dopytu", options=typ_dopytu_opts or [row.get("typ_dopytu","")], index= (typ_dopytu_opts.index(row.get("typ_dopytu")) if row.get("typ_dopytu") in typ_dopytu_opts else 0) if typ_dopytu_opts else 0, key=f"typ_{rid}")
             st.date_input("Dátum pôvodného kontaktu", value=parse_date_safe(row.get("datum_povodneho_kontaktu")), key=f"dpc_{rid}")
             st.selectbox("Stav projektu", options=stav_proj_opts or [row.get("stav_projektu","")], index=(stav_proj_opts.index(row.get("stav_projektu")) if row.get("stav_projektu") in stav_proj_opts else 0) if stav_proj_opts else 0, key=f"stavproj_{rid}")
@@ -389,18 +466,18 @@ if st.session_state.get("show_new_lead_modal"):
             meno = st.text_input("Meno zákazníka*")
             tel = st.text_input("Telefón")
             email = st.text_input("Email")
-            mesto = st.text_input("Mesto")
-            typ = st.text_input("Typ dopytu")
+            mesto = st.selectbox("Mesto", options=mesto_opts or [""], index=0)
+            typ = st.selectbox("Typ dopytu", options=typ_dopytu_opts or [""], index=0)
             dpc = st.date_input("Dátum pôvodného kontaktu*", value=date.today())
-            stavproj = st.text_input("Stav projektu")
+            stavproj = st.selectbox("Stav projektu", options=stav_proj_opts or [""], index=0)
             konkur = st.text_input("Konkurencia")
             cena_k = st.number_input("Cena konkurencie", min_value=0.0, step=100.0)
             nasa = st.number_input("Naša ponuka (orient.)", min_value=0.0, step=100.0)
             reak = st.text_area("Reakcia zákazníka")
             dalsi = st.text_input("Ďalší krok")
             ddk = st.date_input("Dátum ďalšieho kroku", value=None)
-            prio = st.selectbox("Priorita", ["Vysoká","Stredná","Nízka"], index=1)
-            stavlead = st.selectbox("Stav leadu", ["Open","Cold","Converted","Lost"], index=0)
+            prio = st.selectbox("Priorita", priorita_opts, index=1 if len(priorita_opts) > 1 else 0)
+            stavlead = st.selectbox("Stav leadu", stav_leadu_opts, index=0)
             oc = st.number_input("Orientačná cena", min_value=0.0, step=100.0)
             dr = st.date_input("Dátum realizácie", value=None)
             poz = st.text_area("Poznámky")
@@ -450,23 +527,31 @@ if st.session_state.get("show_new_lead_modal"):
 
     new_lead_dialog()
 
-# --- Add new lead form ---
-with st.form("Pridať nový lead"):
-    meno = st.text_input("Meno")
-    email = st.text_input("Email")
-    datum_kroku = st.date_input("Dátum ďalšieho kroku")
-    submitted = st.form_submit_button("Pridať")
-    if submitted:
-        payload = {
-            "meno_zakaznika": meno,
-            "email": email,
-            "datum_dalsieho_kroku": datum_kroku,
-        }
-        rid = insert_lead(SessionLocal, payload)
-        if rid:
-            st.success("Lead pridaný!")
-        else:
-            st.warning("Lead nebol pridaný (duplicita).")
+# --- Footer with import and refresh ---
+st.markdown("---")
+f1, f2, f3 = st.columns([1,1,2])
+with f1:
+    uploaded_file = st.file_uploader(
+        "Import Excel/CSV",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=False,
+    )
+    if uploaded_file is not None:
+        try:
+            name = uploaded_file.name.lower()
+            if name.endswith((".xls", ".xlsx")):
+                imported, skipped = import_from_excel_mapped(SessionLocal, uploaded_file)
+            else:
+                imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_file)
+            remove_duplicate_leads(SessionLocal)
+            st.success(f"Importované: {imported}, Preskočené: {skipped}")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Import zlyhal: {e}")
+with f2:
+    if st.button("🔁 Obnoviť", use_container_width=True):
+        st.experimental_rerun()
+with f3:
+    st.caption("Pozn.: Môžete tiež vložiť súbor 'leads.xlsx' alebo 'leads.csv' do /mnt/data a obnoviť stránku.")
 
 st.caption("⏱️ Časová zóna: Europe/Bratislava")
-st.write("Počet leadov v DB:", fetch_leads_df(SessionLocal).shape[0])
