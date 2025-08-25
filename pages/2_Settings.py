@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+import os
 import pandas as pd
 import streamlit as st
 
-from db import get_engine_session, fetch_leads_df
+from db import get_engine_session, fetch_leads_df, DB_PATH, clear_database
 from prefs import (
     load_category_prefs,
     save_category_prefs,
@@ -87,3 +88,24 @@ with st.form("grid_form"):
         save_grid_prefs({"column_state": new_col_state})
         st.success("Poradie a šírka stĺpcov uložené")
         st.switch_page("app.py")
+
+st.subheader("Správa databázy")
+col1, col2, col3 = st.columns(3)
+with col1:
+    uploaded_db = st.file_uploader("Import databázy", type=["db"])
+    if uploaded_db is not None:
+        with open(DB_PATH, "wb") as f:
+            f.write(uploaded_db.getbuffer())
+        st.success("Databáza importovaná")
+        st.experimental_rerun()
+with col2:
+    if os.path.exists(DB_PATH):
+        with open(DB_PATH, "rb") as f:
+            st.download_button("Export databázy", data=f, file_name="remark_crm.db")
+    else:
+        st.warning("Databázový súbor neexistuje")
+with col3:
+    if st.button("Vymazať databázu"):
+        deleted = clear_database(SessionLocal)
+        st.success(f"Vymazaných záznamov: {deleted}")
+        st.experimental_rerun()
