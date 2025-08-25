@@ -19,6 +19,7 @@ from db import (
     import_from_csv_mapped,
     import_from_excel_mapped,
     ensure_category_values,
+    remove_duplicate_leads,
 )
 from utils import (
     slovak_tz_now_date,
@@ -44,6 +45,9 @@ try:
     import_initial_from_excel(SessionLocal, excel_default_path)
 except Exception as e:
     st.error(f"Import z Excelu zlyhal: {e}")
+
+# Ensure no duplicate leads exist
+remove_duplicate_leads(SessionLocal)
 
 # Top header
 st.title("📋 REMARK CRM – Leads")
@@ -80,6 +84,7 @@ with c3:
                 imported, skipped = import_from_excel_mapped(SessionLocal, uploaded_file)
             else:
                 imported, skipped = import_from_csv_mapped(SessionLocal, uploaded_file)
+            remove_duplicate_leads(SessionLocal)
             st.success(f"Importované: {imported}, Preskočené: {skipped}")
             df_all = fetch_leads_df(SessionLocal)
         except Exception as e:
@@ -95,6 +100,7 @@ with c5:
 default_excel_path = "/data/leads.xlsx"
 if os.path.exists(default_excel_path) and not st.session_state.get("auto_excel_import_done"):
     import_from_excel_mapped(SessionLocal, default_excel_path)
+    remove_duplicate_leads(SessionLocal)
     st.session_state["auto_excel_import_done"] = True
     df_all = fetch_leads_df(SessionLocal)
 
@@ -102,6 +108,7 @@ if os.path.exists(default_excel_path) and not st.session_state.get("auto_excel_i
 default_csv_path = "/data/leads.csv"
 if os.path.exists(default_csv_path) and not st.session_state.get("auto_csv_import_done"):
     import_from_csv_mapped(SessionLocal, default_csv_path)
+    remove_duplicate_leads(SessionLocal)
     st.session_state["auto_csv_import_done"] = True
     df_all = fetch_leads_df(SessionLocal)
 
@@ -430,10 +437,13 @@ if st.session_state.get("show_new_lead_modal"):
                         datum_realizacie=dr,
                         poznamky=poz.strip(),
                     )
-                    insert_lead(SessionLocal, payload)
-                    st.success("Lead pridaný.")
-                    st.session_state["show_new_lead_modal"] = False
-                    st.rerun()
+                    rid = insert_lead(SessionLocal, payload)
+                    if rid:
+                        st.success("Lead pridaný.")
+                        st.session_state["show_new_lead_modal"] = False
+                        st.rerun()
+                    else:
+                        st.warning("Lead nebol pridaný (duplicita).")
         if st.button("Zavrieť"):
             st.session_state["show_new_lead_modal"] = False
             st.rerun()
@@ -452,8 +462,11 @@ with st.form("Pridať nový lead"):
             "email": email,
             "datum_dalsieho_kroku": datum_kroku,
         }
-        insert_lead(SessionLocal, payload)
-        st.success("Lead pridaný!")
+        rid = insert_lead(SessionLocal, payload)
+        if rid:
+            st.success("Lead pridaný!")
+        else:
+            st.warning("Lead nebol pridaný (duplicita).")
 
 st.caption("⏱️ Časová zóna: Europe/Bratislava")
 st.write("Počet leadov v DB:", fetch_leads_df(SessionLocal).shape[0])
